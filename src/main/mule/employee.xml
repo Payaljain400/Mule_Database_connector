@@ -1,22 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="abc56860-3509-447c-ac09-2e47d5609c6d" >
-		<http:listener-connection host="0.0.0.0" port="8081" />
+		<http:listener-connection host="0.0.0.0" port="${secure::http.port}" />
 	</http:listener-config>
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="1348120a-7321-4ef5-825d-1b8c9c18fb45" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="mule" database="training" />
+		<db:my-sql-connection host="localhost" port="${secure::database.dbPort}" user="${secure::database.username}" password="${secure::database.password}" database="${secure::database.dbName}" />
 	</db:config>
 	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="5c8d9060-b5f6-41c9-bca5-63dcd288567e" >
 		<http:request-connection host="localhost" port="8081" />
 	</http:request-config>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="b1acc1c9-0530-4ee0-a71c-434887d3c812" file="${env}.yaml" key="${enc.key}" />
 	<flow name="EmployeeSelectAllFlow" doc:id="f99e1c6b-f3e3-4da7-a06d-089857a839e9" >
-		<http:listener doc:name="Listener" doc:id="e95d88ee-177d-4c4c-86c3-70ee4b33902d" config-ref="HTTP_Listener_config" path="/employees" allowedMethods="GET"/>
+		<http:listener doc:name="Listener" doc:id="e95d88ee-177d-4c4c-86c3-70ee4b33902d" config-ref="HTTP_Listener_config" path="/employees" allowedMethods="GET">
+			<http:error-response statusCode="#[vars.httpStatus default 500]" reasonPhrase='#[vars.reason default "Server Error"]' />
+		</http:listener>
 		<db:select doc:name="Select" doc:id="5c056fa5-8ead-4d4b-b326-519fd24462b7" config-ref="Database_Config">
 			<db:sql >select * from employee</db:sql>
 		</db:select>
@@ -28,10 +33,42 @@ output application/json
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="da312f7e-abca-4c98-9ebe-075a2b2115ee" type="DB:BAD_SQL_SYNTAX">
+				<ee:transform doc:name="Transform Message" doc:id="9449f089-2636-4440-ad62-5fd4782b7b71" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[400]]></ee:set-variable>
+						<ee:set-variable variableName="reason" ><![CDATA["Bad SQL Syntax"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="914836ca-d3de-4afe-ab18-ecce1e83c9aa" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="6b5c9ecd-ad48-418f-8960-6eed486c2761" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
-	<flow name="employeeSelectFlow" doc:id="d4f69390-16cb-4448-ade8-3da32f43bc8a" >
+	<flow name="employeeSelectByIDFlow" doc:id="d4f69390-16cb-4448-ade8-3da32f43bc8a" >
 		<http:listener doc:name="Listener" doc:id="2b0fb8cf-c68c-4531-8ef8-3f60b8596d7f" config-ref="HTTP_Listener_config" path="/employee" allowedMethods="GET">
-			<http:error-response statusCode="#[vars.statusCode]" reasonPhrase="#[vars.reasonPhrase]">
+			<http:error-response statusCode="#[vars.httpStatus]" reasonPhrase="#[vars.reason]">
 				<http:body ><![CDATA[#[payload]]]></http:body>
 			</http:error-response>
 		</http:listener>
@@ -63,20 +100,34 @@ payload]]></ee:set-payload>
 output application/json
 ---
 {
-	"status": 401,
 	"message":"Employee data not found for this ID"
 }]]></ee:set-payload>
 					</ee:message>
 					<ee:variables>
-						<ee:set-variable variableName="StatusCode"><![CDATA[401]]></ee:set-variable>
-						<ee:set-variable variableName="reasonPhrase"><![CDATA["Employee Not Found"]]></ee:set-variable>
+						<ee:set-variable variableName="httpStatus" ><![CDATA[401]]></ee:set-variable>
+						<ee:set-variable variableName="reason" ><![CDATA["Employee Not Found"]]></ee:set-variable>
 					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="986a840e-153d-4a15-8f78-c0de765c027f" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="2957990d-3eca-4321-90b9-40f7d023bbb7" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
 				</ee:transform>
 			</on-error-propagate>
 		</error-handler>
 	</flow>
 	<flow name="EmployeeSelectByEmailFlow" doc:id="fd63d68a-30c8-4c2a-8374-c6560aed9f98" >
-		<http:listener doc:name="Listener" doc:id="80539cf2-333c-4d3c-9efa-f0a97fa0d43a" config-ref="HTTP_Listener_config" path="/EmployeesByEmail" allowedMethods="GET"/>
+		<http:listener doc:name="Listener" doc:id="80539cf2-333c-4d3c-9efa-f0a97fa0d43a" config-ref="HTTP_Listener_config" path="/EmployeesByEmail" allowedMethods="GET">
+			<http:error-response statusCode="#[vars.httpStatus]" reasonPhrase="#[vars.reason]" />
+		</http:listener>
 		<set-variable value='#[attributes.queryParams.Email default ""]' doc:name="Set Variable" doc:id="a908c664-7388-4aee-9ba1-533472600197" variableName="EmailVar"/>
 		<db:select doc:name="Select" doc:id="5cf986da-0bd8-4212-bf85-e14c4821b830" config-ref="Database_Config">
 			<db:sql >select * from employee where Email=:email</db:sql>
@@ -92,11 +143,40 @@ output application/json
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="de7cfa08-c360-4253-b34d-7033c0d82933" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="43f6cc25-5d1e-4a05-8f0e-41215ba1f5cc" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 	<flow name="EmployeeInsertFlow" doc:id="ac6ce9f3-0d54-4ae3-8061-888c16af3b1d" >
-		<http:listener doc:name="Listener" doc:id="5e831999-638c-4b0d-b81a-8284c99440dd" config-ref="HTTP_Listener_config" path="/employee" allowedMethods="POST"/>
-		<set-variable value='#[payload.Email default ""]' doc:name="Set Variable" doc:id="e8059580-b386-4d6d-9754-002a18646526" variableName="EmailVar"/>
-		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="c2c47c49-8195-47e2-b8e4-bdf9dce6f1b8" variableName="OldPayload"/>
+		<http:listener doc:name="Listener" doc:id="5e831999-638c-4b0d-b81a-8284c99440dd" config-ref="HTTP_Listener_config" path="/employee" allowedMethods="POST">
+			<http:error-response statusCode="#[vars.httpStatus default 500]" reasonPhrase='#[vars.reason default "Server Error"]' />
+		</http:listener>
+		<ee:transform doc:name="Transform Message" doc:id="c2e66444-fe7f-409d-805f-aa36eaa9a50d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+
+payload
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="EmailVar" ><![CDATA[payload.Email]]></ee:set-variable>
+				<ee:set-variable variableName="OldPayload" ><![CDATA[payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
 		<http:request method="GET" doc:name="Request" doc:id="96b1d67b-562f-4298-9c98-48b063392d48" path="/EmployeesByEmail" config-ref="HTTP_Request_configuration">
 			<http:query-params ><![CDATA[#[output application/java
 ---
@@ -105,8 +185,53 @@ payload]]></ee:set-payload>
 }]]]></http:query-params>
 		</http:request>
 		<flow-ref doc:name="Flow Reference" doc:id="1d7f8555-1505-4b16-ba6a-6bcb081e81c6" name="EmployeeInsertSubFlow"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="dca8c987-1eb0-40c4-9d0d-fd35ff89f05f" type="DB:BAD_SQL_SYNTAX">
+				<ee:transform doc:name="Transform Message" doc:id="7f599bf8-2fe9-4f2b-a47a-06320afd874c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="69611c28-7d60-458c-ba57-a97c302eb156" type="HTTP:NOT_FOUND">
+				<ee:transform doc:name="Transform Message" doc:id="f010fe4c-4c94-4b08-9cf0-f91fcab358b8" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[404]]></ee:set-variable>
+						<ee:set-variable variableName="reason" ><![CDATA["Not Found"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="24a56068-3ad7-4324-b5b1-72f76effd81b" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="405315db-e006-4594-985a-e628de047d6b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
-	<flow name="EmployeeInsertSubFlow" doc:id="bc3140e2-968b-42fb-801a-ea2725082189" >
+	<sub-flow name="EmployeeInsertSubFlow" doc:id="064109f8-dc01-4b92-8fd0-b768f210d3e0" >
 		<choice doc:name="Choice" doc:id="0058265d-c80a-4aab-9a69-c55d7b975b36">
 			<when expression="#[payload[0] == null]">
 				<db:insert doc:name="Insert" doc:id="65a5dd6d-856c-4b4e-adb4-a5b35a97a9b1" config-ref="Database_Config">
@@ -141,7 +266,7 @@ output application/json
 				</ee:transform>
 			</otherwise>
 		</choice>
-	</flow>
+	</sub-flow>
 	<flow name="EmployeeUpdateFlow" doc:id="5fc8774e-2a8f-493d-ad05-906f7fa382d1" >
 		<http:listener doc:name="Listener" doc:id="71af37de-589d-414c-b449-7f43fe29895d" config-ref="HTTP_Listener_config" path="/updateEmployee/{EmpId}" allowedMethods="PATCH"/>
 		<set-variable value='#[attributes.uriParams.EmpId default ""]' doc:name="Set Variable" doc:id="d82c3f23-c550-4e02-b69d-a6eea711b50d" variableName="EmployeeIdVar"/>
@@ -163,6 +288,21 @@ output application/json
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="74cdc1f5-5cc8-4315-b1ec-a179f5a8f489" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="96b3e9dd-d98d-4a40-8aa1-6cceb8f581db" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 	<flow name="EmployeeDeleteFlow" doc:id="c4222d23-d452-4193-a5d5-f10835f8c0ab" >
 		<http:listener doc:name="Listener" doc:id="de9f58ed-9bed-4430-a31a-20c456bfd029" config-ref="HTTP_Listener_config" path="/deleteEmployee/{EmpId}" allowedMethods="DELETE"/>
@@ -183,5 +323,20 @@ output application/json
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="0ed9237f-1009-40fd-8050-181167e41098" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="591d1f3d-4b7b-4aad-9818-4b8c31c093f6" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"ErrorMessage":error.description,
+	"ErrorType":error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 </mule>

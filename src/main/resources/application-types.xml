@@ -39,4 +39,5 @@ type employee_json = {|
       </types:output-event>
     </types:processor-declaration>
   </types:enrichment>
+  <types:enrichment select="#7cad6ba9-fc3d-45fa-b622-7132f9233f74"/>
 </types:mule>

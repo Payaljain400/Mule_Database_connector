@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<munit:config name="employee-test-suite.xml" />
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="edf8593d-ebc0-4b9c-b55e-d03ba19ab26c" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="mule" database="training" />
+	</db:config>
+	<munit:test name="employee-test-suite-EmployeeSelectAllFlowTest" doc:id="dafc1a98-aa77-4c4e-86a3-e3091f8dbe48" description="Test">
+		<munit:behavior >
+			<munit-tools:mock-when doc:name="Mock when" doc:id="672ba5b3-6b43-429f-802f-6ce1ff3f350d" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config1" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow-ref to EmployeeSelectAllFlow" doc:id="fd61d197-4ce6-4749-a94c-7e39554486c1" name="EmployeeSelectAllFlow"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert that" doc:id="356edf5d-6ddb-4179-996b-55a18f39637e" message="payload is null" expression="#[payload]" is="#[MunitTools::notNullValue()]]"/>
+		</munit:validation>
+	</munit:test>
+
+
+</mule>

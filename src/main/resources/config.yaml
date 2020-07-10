@@ -1,0 +1,10 @@
+http:
+  port: "8081"
+  
+database:
+  username : "root"
+  password : "![O1Ey5lslX22ZmIHisGfwmw==]"
+  dbPort : "3306"
+  dbName : "training"
+  
+  
